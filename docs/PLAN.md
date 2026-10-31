@@ -13,8 +13,11 @@ A browser authenticator extension that behaves like Google Authenticator:
   details and housekeeping
 - optional 6-digit **passcode** that encrypts the vault at rest
 - one-click **clock sync** so codes are correct on machines whose clock drifts
+- **screen scan**: drag a frame around a QR code on the current page and the
+  account is read from the box — no camera, no upload
 
-Non-goals for v1: camera/image QR scanning, `otpauth-migration://` import,
+Non-goals for v1: camera scanning and importing image files (the scanner reads
+the visible page only), `otpauth-migration://` import,
 cloud sync, folders/tags, autofill into sites, account icons fetched from the
 network, password-manager integration, passkey/WebAuthn.
 
@@ -26,7 +29,7 @@ network, password-manager integration, passkey/WebAuthn.
 | Unlock lifetime | 15 minutes. Derived key kept in `chrome.storage.session`; dies on browser restart or explicit lock. |
 | Backup format | **Encrypted** with its own user-chosen passphrase (defaults to the current passcode, but may differ). KDF params + salt + IV live in the file. Copy and download both offered. The backup passphrase must be independent, or a forgotten unlock PIN destroys the backup too. |
 | Clock sync | HTTPS time source, multi-sample offset estimation, persisted, manual re-sync button, device clock fallback offline. |
-| Add accounts | Manual base32 secret entry + `otpauth://` URI paste. No QR in v1. |
+| Add accounts | Manual base32 secret entry, `otpauth://` URI paste, or a dragged frame around a QR code on the current page. Decoding is local. |
 | Browser targets | Chromium MV3 **and** Firefox MV2 (manifest keeps `chromium:` / firefox keys). |
 
 Honest framing to carry into the UI copy: nothing can be "100% in sync". The
@@ -112,16 +115,21 @@ src/
     passcode-gate.tsx  passcode-input.tsx       (OTP-style 6 boxes)
   hooks/
     use-vault.ts  use-now.ts
+  background.ts              scan: capture the tab, crop, decode, hand the link over
   lib/
     base32.ts  totp.ts  otpauth.ts  crypto.ts  vault.ts  backup.ts
-    settings.ts  env.ts  chrome-env.ts  memory-env.ts  utils.ts
+    scan.ts  scan-overlay.ts  settings.ts
+    env.ts  chrome-env.ts  memory-env.ts  utils.ts
   styles/
     tokens.css                 Appendix A, verbatim — the only literal values
     globals.css                tailwind imports + @layer base + @layer components
 ```
 
-Deleted: `src/sidebar/**`, `src/content/**`, `src/background.ts` (nothing needs
-a background context; popup and options talk to storage directly).
+Deleted: `src/sidebar/**`, `src/content/**`. No content script: the scan layer
+is injected on demand with `activeTab`. `src/background.ts` exists for the scan
+only — it captures the tab and decodes the frame, holds no state beyond the
+pending link, and never touches the vault; popup and options still talk to
+storage directly.
 
 Popup pages are capped at 800×600 CSS px by both Chromium and Firefox. Body is
 `width: 360px`; add/edit replace the panel inline, and only destructive
@@ -374,7 +382,12 @@ arrow keys move between passcode boxes, `/` jumps to search when it exists.
 ```
 
 - Body fixed at 360 px so the popup never resizes under the cursor. Header:
-  wordmark, add, settings — nothing else until clock sync lands (M4).
+  wordmark, scan, add, settings — nothing else until clock sync lands (M4).
+- Scan: the header button injects the layer on the active page; dragging a box
+  dims the page, the layer hides itself, the background captures and decodes,
+  and the link lands in the add form next time the popup opens. A page that
+  refuses injection (browser UI, web store) says so inline, and a frame without
+  a working QR asks for a tighter box instead of failing silently.
 - The list is **one** bordered panel; rows are hairline-separated, not cards.
   Identity left (issuer 14/500, account 12 muted), code right, in a column that
   does not shift as digits change.
@@ -479,16 +492,22 @@ Keep both browser variants; strip sidebar/content wiring.
   "chromium:action":   { "default_popup": "action/index.html", "default_icon": { … } },
   "firefox:browser_action": { "default_popup": "action/index.html", "default_icon": { … } },
   "options_ui": { "page": "options/index.html", "open_in_tab": true },
-  "chromium:permissions": ["storage"],
+  "chromium:permissions": ["storage", "activeTab", "scripting"],
   "chromium:host_permissions": ["https://one.one.one.one/*", "https://worldtimeapi.org/*"],
-  "firefox:permissions": ["storage", "https://one.one.one.one/*", "https://worldtimeapi.org/*"]
+  "firefox:permissions": ["storage", "activeTab", "https://one.one.one.one/*", "https://worldtimeapi.org/*"],
+  "chromium:background": {"service_worker": "background.ts", "type": "module"},
+  "firefox:background": {"scripts": ["background.ts"]}
 }
 ```
 
-- `"tabs"` and `"sidePanel"` permissions are dropped: the extension no longer
-  touches tabs and no longer has a panel.
-- No `content_scripts` → no `<all_urls>` access, which also simplifies store
-  review.
+- `"tabs"` and `"sidePanel"` permissions are dropped: the extension reads no
+  tab URLs and has no panel.
+- `activeTab` is granted only by the click that starts a scan: `scripting`
+  injects the selection layer into that one tab and `tabs.captureVisibleTab`
+  reads what the user framed. Nothing is captured before the frame is drawn,
+  and no image leaves the machine.
+- No `content_scripts` and no `<all_urls>`: the scanner never runs until the
+  user asks for it, on the page already in front of them.
 - No `content_security_policy` entry: Tailwind and shadcn are compile-time CSS,
   React is bundled; MV3 already forbids inline/remote script.
 - Icons: the **A** of the wordmark, cropped to its own bounding box so the
@@ -515,6 +534,11 @@ the extension API directly.
 - `clock.test.ts` — offset math given synthetic `t0/rtt/serverTs`, min-RTT
   selection, confidence thresholds
 - `vault.test.ts` — plaintext↔encrypted migration, backup envelope round-trip
+- `scan.test.ts` — CSS-to-device-pixel crop math at 1×/2×, clamping and the
+  no-zero-size guard; the decode itself is checked in a real browser against a
+  generated QR (jsdom has no `createImageBitmap`)
+- `account-form.test.tsx` — a seeded `otpauth://` link fills issuer and account
+  after the same debounce a pasted link gets
 - `popup.test.tsx` — empty state, add by secret, add by URI with preview, copy +
   confirmation, search filter, locked gate, wrong passcode, unlock expiry
 - `backup.test.tsx` — export gating without a passcode, export → wipe → import,
@@ -573,6 +597,11 @@ reviewable.
     screenshots are captured manually); then the web-interface-guidelines review
     over `src/components` and the two entry pages, fixing real findings.
 
+11. **Screen scan** — `activeTab` + `scripting`, injected selection layer,
+    background capture/crop/decode, link handoff into the add form. AC: a QR of
+    a known `otpauth://` link on a normal page fills the form with the same
+    fields; a frame without a code keeps the layer open with one sentence.
+
 ## 12. Risks
 
 | Risk | Mitigation |
@@ -591,6 +620,8 @@ reviewable.
 | Marker overused as accent colour | Three fixed uses, checked in phase 4 and the sweep |
 | Dark mode half-implemented | Dark variant is scoped and inert; no `.dark`, no `dark:` utilities, deferral recorded |
 | Clock "100% sync" expectation | Offset is measured and displayed with confidence, never claimed exact |
+| Screen capture reads more than the user framed | Capture happens only after the frame is drawn, cropping happens before decoding, the image is never stored or sent, and `activeTab` is per-click |
+| Scan decode fails on stylised or tiny codes | `attemptBoth` inversion, a tighter-box message instead of a silent failure, manual entry stays the fallback |
 
 ## 13. Open items (decide during implementation, not blocking)
 

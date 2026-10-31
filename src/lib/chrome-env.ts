@@ -1,5 +1,6 @@
 import {ext} from './api'
-import type {Env, Store} from './env'
+import {SCAN_KEY, type Env, type Store} from './env'
+import {scanOverlay} from './scan-overlay'
 
 const toStore = (area: chrome.storage.StorageArea): Store => ({
   async get<T>(key: string) {
@@ -26,5 +27,32 @@ export const env: Env = {
   now: () => Date.now(),
   fetch: (input, init) => fetch(input, init),
   copy: (text) => navigator.clipboard.writeText(text),
-  openOptions: () => ext.runtime.openOptionsPage()
+  openOptions: () => ext.runtime.openOptionsPage(),
+  startScan: async () => {
+    const [tab] = await ext.tabs.query({active: true, currentWindow: true})
+    if (!tab?.id) return {ok: false, reason: 'No active tab.'}
+
+    try {
+      // MV3 injects a function; MV2 only takes source text.
+      if (ext.scripting?.executeScript) {
+        await ext.scripting.executeScript({target: {tabId: tab.id}, func: scanOverlay})
+      } else {
+        await ext.tabs.executeScript(tab.id, {
+          code: `(${scanOverlay.toString()})()`
+        })
+      }
+      return {ok: true}
+    } catch {
+      return {
+        ok: false,
+        reason: 'This page cannot be scanned. Open a regular web page and try again.'
+      }
+    }
+  },
+  takeScannedLink: async () => {
+    const local = toStore(ext.storage.local)
+    const link = await local.get<string>(SCAN_KEY)
+    if (typeof link === 'string') await local.remove(SCAN_KEY)
+    return typeof link === 'string' ? link : undefined
+  }
 }

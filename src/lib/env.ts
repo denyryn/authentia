@@ -1,3 +1,6 @@
+/** Where the background parks a decoded link for the popup to pick up. */
+export const SCAN_KEY = 'scan.link'
+
 export type Store = {
   get<T>(key: string): Promise<T | undefined>
   set(key: string, value: unknown): Promise<void>
@@ -16,4 +19,6 @@ export type Env = {
   fetch: typeof fetch
   copy(text: string): Promise<void>
   openOptions(): void
+  startScan(): Promise<{ok: true} | {ok: false; reason: string}>
+  takeScannedLink(): Promise<string | undefined>
 }

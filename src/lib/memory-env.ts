@@ -1,4 +1,4 @@
-import type {Env, Store} from './env'
+import {SCAN_KEY, type Env, type Store} from './env'
 
 type Memory = {local: Map<string, unknown>; session: Map<string, unknown>}
 
@@ -27,7 +27,16 @@ export function createMemoryEnv(startAt = 0) {
       throw new Error('fetch is not stubbed in this test')
     }) as unknown as typeof fetch,
     copy: async () => {},
-    openOptions: () => {}
+    openOptions: () => {},
+    startScan: async () => ({
+      ok: false,
+      reason: 'Scanning needs the extension.'
+    }),
+    takeScannedLink: async () => {
+      const link = memory.local.get(SCAN_KEY)
+      memory.local.delete(SCAN_KEY)
+      return typeof link === 'string' ? link : undefined
+    }
   }
 
   return {

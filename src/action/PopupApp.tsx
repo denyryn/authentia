@@ -1,5 +1,5 @@
-import {LockKeyhole, Plus, Settings, X} from 'lucide-react'
-import {useState} from 'react'
+import {LockKeyhole, Plus, ScanLine, Settings, X} from 'lucide-react'
+import {useEffect, useState} from 'react'
 
 import {AccountForm} from '@/components/account-form'
 import {AccountList} from '@/components/account-list'
@@ -10,12 +10,16 @@ import {useVault} from '@/hooks/use-vault'
 import type {Env} from '@/lib/env'
 import type {Account} from '@/lib/vault'
 
-type Panel = {mode: 'add'} | {mode: 'edit'; account: Account} | null
+type Panel =
+  | {mode: 'add'; seed?: string}
+  | {mode: 'edit'; account: Account}
+  | null
 
 export function PopupApp({env}: {env: Env}) {
   const now = useNow(env.now)
   const {state, error, clearError, reload, actions} = useVault(env)
   const [panel, setPanel] = useState<Panel>(null)
+  const [scanError, setScanError] = useState<string | null>(null)
 
   const ready = state?.status === 'open' || state?.status === 'empty'
   const locked = state?.status === 'locked'
@@ -40,6 +44,24 @@ export function PopupApp({env}: {env: Env}) {
     setPanel({mode: 'add'})
   }
 
+  // A scan finishes after the popup closed; the link waits in storage.
+  useEffect(() => {
+    if (!ready) return
+    let alive = true
+    void env.takeScannedLink().then((link) => {
+      if (alive && link) setPanel((current) => current ?? {mode: 'add', seed: link})
+    })
+    return () => {
+      alive = false
+    }
+  }, [env, ready])
+
+  const startScan = async () => {
+    setScanError(null)
+    const outcome = await env.startScan()
+    if (!outcome.ok) setScanError(outcome.reason)
+  }
+
   return (
     <main className="app-shell">
       <header className="app-bar">
@@ -55,6 +77,16 @@ export function PopupApp({env}: {env: Env}) {
         </h1>
         {!locked && (
           <div className="app-bar-actions">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-muted-foreground hover:text-foreground"
+              aria-label="Scan a QR code"
+              disabled={!ready || Boolean(panel)}
+              onClick={() => void startScan()}
+            >
+              <ScanLine className="size-4" />
+            </Button>
             <Button
               variant="ghost"
               size="icon"
@@ -109,6 +141,7 @@ export function PopupApp({env}: {env: Env}) {
             env={env}
             now={now}
             existing={panel.mode === 'edit' ? panel.account : undefined}
+            seed={panel.mode === 'add' ? panel.seed : undefined}
             others={items}
             error={error}
             onSave={save}
@@ -130,6 +163,20 @@ export function PopupApp({env}: {env: Env}) {
 
         {ready && !panel && (
           <>
+            {scanError && (
+              <div className="notice" role="alert">
+                <p>{scanError}</p>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="notice-dismiss"
+                  aria-label="Dismiss scan error"
+                  onClick={() => setScanError(null)}
+                >
+                  <X className="size-4" />
+                </Button>
+              </div>
+            )}
             {error && (
               <div className="notice" role="alert">
                 <p>{error}</p>

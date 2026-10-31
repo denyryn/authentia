@@ -14,6 +14,8 @@ type AccountFormProps = {
   env: Env
   now: number
   existing?: Account
+  /** A link captured by the scanner; lands in the setup field as if pasted. */
+  seed?: string
   others: Account[]
   error?: string | null
   onSave(account: Account): Promise<boolean>
@@ -41,13 +43,14 @@ export function AccountForm({
   env,
   now,
   existing,
+  seed,
   others,
   error,
   onSave,
   onDelete,
   onCancel
 }: AccountFormProps) {
-  const [input, setInput] = useState(existing?.secret ?? '')
+  const [input, setInput] = useState(existing?.secret ?? seed ?? '')
   const [issuer, setIssuer] = useState(existing?.issuer ?? '')
   const [account, setAccount] = useState(existing?.account ?? '')
   const [parsed, setParsed] = useState<OtpAuthAccount | null>(null)

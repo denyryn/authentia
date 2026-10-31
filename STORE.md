@@ -19,7 +19,7 @@ Last updated: 2026-10-31
 
 - Name: authentia
   <!-- The store title, 100 characters at most on every store. -->
-- Summary: Adds a sidebar panel to the browser.
+- Summary: Time-based one-time passwords in a vault encrypted on this device.
   <!-- Chrome's summary, 132 characters at most. It doubles as the Safari
   subtitle only when it fits 30. -->
 - Subtitle: TODO a 30 character App Store subtitle
@@ -82,7 +82,10 @@ Per store answer sheets, filled from the two lines above:
 
 ### Single purpose
 
-Adds a sidebar panel to the browser.
+Generates time-based one-time passwords for the accounts a user stores, and
+keeps those accounts in a vault that can be encrypted with a passcode. It also
+lets the user drag a frame around a QR code on the page in front of them to add
+an account, decoding that frame locally.
 
 ### Permissions justification
 
@@ -91,12 +94,20 @@ the manifest requests, as the Chrome dashboard and the Edge Privacy page
 ask them. A reason that still starts with TODO is not sent. "Needed for
 the extension to work" fails review on every store. -->
 
-- sidePanel: Renders the extension's main interface in the browser side
-  panel. Requested on Chromium only.
-- tabs: TODO reason
-- Content script match <all_urls>: The content script runs on the pages the
-  user visits to render the extension's on-page interface. Narrow this to
-  the specific sites your extension needs before submitting.
+- storage: Saves the user's accounts, the encrypted vault, their settings and
+  the 15-minute unlock session on their own device. Nothing is synced.
+- activeTab: Grants access to the page the user is on only when they press the
+  scan button, so the extension can capture that page to read a QR code the
+  user framed. No page is read before that click, and no page content is stored
+  or sent anywhere.
+- scripting: Injects the drag-a-frame selection layer into that one page for the
+  duration of a scan. It is never a declared content script, so it does not run
+  on any page the user has not asked to scan.
+- Host permissions https://one.one.one.one/* and https://worldtimeapi.org/*:
+  Read the current time from a public HTTPS time endpoint so codes stay correct
+  on a machine whose clock has drifted. No user data is sent in that request.
+- No content scripts and no <all_urls> access: the extension does not run on
+  pages on its own.
 
 Remote code: none. Every script ships inside the package, which is the
 answer to the remote code question on Chrome and Edge.

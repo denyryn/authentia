@@ -45,8 +45,11 @@ A browser extension that is an authenticator, not a website:
 - a one-click clock sync measures the machine's offset against an HTTPS time
   source, shows the measured offset, and makes codes use the corrected time;
   when the estimate is stale or unreachable the UI says so instead of pretending;
-- everything is local: no account, no cloud, no telemetry, one host permission
-  used only by the time probe.
+- a scan button turns the page in front of the user into an account: drag a
+  frame around a QR code, the box is decoded locally, and the add form opens
+  filled in — a frame without a code explains itself instead of failing;
+- everything is local: no account, no cloud, no telemetry, no camera, and the
+  only host permissions are the two time probes.
 
 The interface is deliberately dense, warm-paper and ink, with one highlighter
 accent used only for the copy confirmation, the focused passcode box and the last
@@ -146,13 +149,20 @@ agreed target for the next milestone.
 67. As a user, I want to reset the measured offset, so that a bad measurement can be discarded.
 68. As a user, I want plain-language copy explaining that clock drift is the usual cause of rejected codes, so that I stop blaming the service.
 
+### Scanning a setup code
+
+79. As a user, I want to drag a frame around a QR code on the page in front of me, so that adding an account takes one gesture instead of typing a secret.
+80. As a user, I want the frame to prove it holds a QR code, so that a stray box is rejected with one sentence instead of adding a wrong account.
+81. As a user, I want the scanned code to land in the add form, so that I still see issuer, account and a live code before saving.
+82. As a user, I want a scanned link that is not an authenticator setup code to say so, so that a QR for a URL is not silently ignored.
+
 ### Options, privacy and housekeeping
 
 69. As a user, I want the options page to group passcode, backup, clock and destructive actions in that order, so that the risky controls are last.
 70. As a user, I want to choose the auto-lock duration, so that security and convenience match my environment.
 71. As a user, I want to delete all extension data behind a type-to-confirm, so that wiping is deliberate and complete.
 72. As a user, I want to know that data never leaves this machine except for a time probe that sends nothing about me, so that privacy is a stated fact, not a guess.
-73. As a user, I want the extension to request no access to the pages I browse, so that installing it does not widen what the browser exposes.
+73. As a user, I want no standing access to the pages I browse, so that installing it does not widen what the browser exposes; page access should exist only for the moment I ask to scan.
 74. As a user, I want a clear error state if the vault cannot be decrypted, with the restore path, so that corruption is not a silent blank screen.
 75. As a keyboard user, I want every control reachable and visibly focused, so that the extension is usable without a mouse.
 76. As a user who asks the system for reduced motion, I want the shake and the countdown transition reduced, so that the UI respects that setting.
@@ -164,20 +174,39 @@ agreed target for the next milestone.
 ### Surfaces and shell
 
 - The product has exactly two surfaces: a toolbar popup and an options page
-  opened in a tab. The template's sidebar, content script and background worker
-  are removed; no background context is needed because the popup and options
-  page talk to storage directly.
+  opened in a tab. The template's sidebar and content script are removed. A
+  background context exists only for the scan: it captures the tab, crops the
+  framed box and decodes it, then stores the link for the popup. It holds no
+  vault state and is idle otherwise.
 - The popup is a fixed 360px-wide document with no viewport units, because both
   Chromium and Firefox clamp popups to 800×600 and viewport units cause circular
   sizing. Long flows (backup, passcode management, clock detail) live in the
   options tab; the popup swaps its panel for an inline add/edit form and opens a
   dialog only to confirm deleting an account.
 - Both browser targets ship: Chromium MV3 and Firefox MV2, using the manifest's
-  `chromium:`/`firefox:` key prefixes. Permissions are `storage` plus host access
-  to the two time endpoints; the template's `tabs` and `sidePanel` permissions are
-  dropped, and no content script or `<all_urls>` access remains.
+  `chromium:`/`firefox:` key prefixes. Permissions are `storage`, `activeTab`
+  (granted only by the click that starts a scan, on that one page) and
+  `scripting` (the selection layer), plus host access to the two time endpoints.
+  The template's `tabs` and `sidePanel` permissions are dropped, and no content
+  script or `<all_urls>` access remains.
 - No `content_security_policy` override: styling is compile-time CSS and all
   script is bundled, which MV3 already permits.
+
+### Scanning
+
+- The popup's scan button injects one self-contained selection layer into the
+  active tab (`scripting` on MV3, `tabs.executeScript` on MV2) and never runs on
+  its own. A page that refuses injection is reported inline.
+- The layer dims the page, draws the frame while dragging, hides itself before
+  the capture so it cannot cover the code, and returns on a failed read with
+  the reason; Escape or a completed read removes it.
+- The background captures the visible tab, maps the frame from CSS to device
+  pixels using the reported viewport, decodes with `jsQR` (both inversions) and
+  accepts only `otpauth://totp` links through the same parser as pasted URIs.
+  The image is decoded in memory and never stored or transmitted.
+- A successful read writes the link to storage; the popup picks it up on its
+  next open and seeds the add form, so saving still goes through the normal
+  preview-and-save path (and the passcode gate when locked).
 
 ### Vault model
 
@@ -343,6 +372,9 @@ now and weaker later.
   current one, merge de-duplication and the added/updated/skipped report.
 - Clock: offset math from synthetic samples, min-RTT selection, confidence
   thresholds, stale detection, offline fallback retaining the previous offset.
+- Scan geometry: a CSS-pixel selection mapped onto a device-pixel capture at
+  1× and 2×, clamped to the frame, never degenerate. The decode itself runs
+  against a generated QR in a real browser, because jsdom has no image decoding.
 - Pages, through the single seam: first run with an empty vault, add by secret,
   add by URI with preview, copy with confirmation, search filtering, lock gate
   and wrong-passcode path, unlocking and expiry, backup export gating, import
