@@ -17,7 +17,10 @@
     "verbatimModuleSyntax": false,
     "useDefineForClassFields": true,
     "skipLibCheck": true,
-    "allowImportingTsExtensions": true
+    "allowImportingTsExtensions": true,
+    "paths": {
+      "@/*": ["./src/*"]
+    }
   },
   "include": ["./", "extension-env.d.ts", "browser-global.d.ts"],
   "exclude": ["node_modules", "dist"]
