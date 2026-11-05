@@ -2,7 +2,7 @@
   "private": true,
   "name": "authentia",
   "description": "TOTP authenticator with an encrypted vault.",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "license": "MIT",
   "type": "module",
   "devDependencies": {

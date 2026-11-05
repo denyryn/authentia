@@ -33,11 +33,21 @@ jobs:
       - run: npm run build:chrome
       - run: npm run build:firefox
 
+      - name: Read the release notes from the changelog
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          awk -v version="$version" '
+            index($0, "## [" version "]") == 1 { printing = 1; next }
+            printing && /^## \[/ { exit }
+            printing { print }
+          ' CHANGELOG.md > release-notes.md
+          test -s release-notes.md
+
       - name: Publish the two zips
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release create "$GITHUB_REF_NAME" dist/*.zip \
             --title "$GITHUB_REF_NAME" \
-            --generate-notes \
+            --notes-file release-notes.md \
             --verify-tag
