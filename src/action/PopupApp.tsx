@@ -73,7 +73,7 @@ export function PopupApp({env}: {env: Env}) {
             width={20}
             height={20}
           />
-          authentia
+          Authentia
         </h1>
         {!locked && (
           <div className="app-bar-actions">

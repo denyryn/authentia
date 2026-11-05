@@ -15,8 +15,10 @@ function Harness({onComplete}: {onComplete?: (value: string) => void}) {
   )
 }
 
+// The boxes are password inputs so the digits never render in the clear,
+// which means they have no textbox role; address them by their labels.
 const boxes = () =>
-  screen.getAllByRole('textbox') as HTMLInputElement[]
+  screen.getAllByLabelText(/^Passcode digit/) as HTMLInputElement[]
 
 const values = () => boxes().map((box) => box.value)
 

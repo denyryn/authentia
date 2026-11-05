@@ -134,7 +134,7 @@ export function PasscodeInput({
             onKeyDown={(event) => handleKeyDown(index, event)}
             onPaste={(event) => handlePaste(index, event)}
             onFocus={(event) => event.currentTarget.select()}
-            type="text"
+            type="password"
             inputMode="numeric"
             pattern="[0-9]*"
             maxLength={1}

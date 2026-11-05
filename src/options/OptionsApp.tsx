@@ -18,7 +18,7 @@ function Header({count}: {count: string | null}) {
   return (
     <header className="flex flex-col gap-(--space-xs) border-b border-border pb-(--space-lg)">
       <h1 className="text-(length:--text-xl) font-semibold tracking-[-0.02em] text-foreground">
-        authentia Settings
+        Authentia Settings
       </h1>
       <div className="flex flex-wrap items-baseline justify-between gap-(--space-sm)">
         <p className="text-(length:--text-md) text-muted-foreground">
